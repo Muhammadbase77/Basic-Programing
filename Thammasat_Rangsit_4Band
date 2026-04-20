@@ -1,0 +1,51 @@
+#Thammasat_Rangsit_4Band 
+ID: FTSMT3OMEO27VOQIJKCF4JSB
+Phase: Completed
+Runtime: 33s (started 2026-04-20 14:54:38 +0700)
+Attempted 1 time
+Priority: 100 (default)
+Batch compute usage: 9.6739 EECU-seconds
+
+// =============================================
+// Export 4-Band Raster — มธ. รังสิต
+// Bands: Red, Green, Blue, NIR (Sentinel-2)
+// =============================================
+
+// 1. กำหนดขอบเขตพื้นที่ มธ. รังสิต
+var thammasat = ee.Geometry.Rectangle([
+  100.600, 14.050,   // Southwest (lon, lat)
+  100.650, 14.090    // Northeast (lon, lat)
+]);
+
+// 2. โหลดภาพ Sentinel-2 Surface Reflectance
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterBounds(thammasat)
+  .filterDate('2024-01-01', '2024-12-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))  // เมฆน้อยกว่า 10%
+  .median()           // ใช้ค่ามัธยฐานตลอดปี (ลด noise)
+  .clip(thammasat);
+
+// 3. เลือก 4 แบนด์ + ปรับสเกล (หาร 10000 → ค่า 0–1)
+var image4band = s2.select(['B4', 'B3', 'B2', 'B8'])  // Red, Green, Blue, NIR
+  .rename(['Red', 'Green', 'Blue', 'NIR'])
+  .divide(10000);
+
+// 4. แสดงผลใน Map
+Map.centerObject(thammasat, 14);
+Map.addLayer(image4band, {bands: ['Red', 'Green', 'Blue'], min: 0, max: 0.3}, 'RGB');
+Map.addLayer(image4band, {bands: ['NIR', 'Red', 'Green'], min: 0, max: 0.4}, 'False Color');
+
+// 5. Export ไปที่ Google Drive
+Export.image.toDrive({
+  image: image4band,
+  description: 'Thammasat_Rangsit_4Band',
+  folder: 'GEE_Export',           // ชื่อโฟลเดอร์ใน Google Drive
+  fileNamePrefix: 'TU_4band_2024',
+  region: thammasat,
+  scale: 10,                      // 10 เมตร/pixel (Sentinel-2 native)
+  crs: 'EPSG:4326',
+  maxPixels: 1e9
+});
+
+print('✅ กด Tasks (ขวามือ) แล้วกด Run เพื่อ Export');
+print('Band info:', image4band.bandNames());
